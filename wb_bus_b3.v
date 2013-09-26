@@ -302,9 +302,9 @@ module wb_bus_b3(/*AUTOARG*/
    reg [MASTERS-1:0] m_req;
    
    always @(*) begin
-      if (m_cyc_i & grant) begin
+      if (m_cyc_i & prev_grant) begin
          // The bus is not released this cycle
-         m_req = grant;
+         m_req = prev_grant;
       end else begin
          m_req = m_cyc_i;
       end
@@ -314,7 +314,7 @@ module wb_bus_b3(/*AUTOARG*/
    // fair arbitration (round robin)
    always @(posedge clk_i) begin
       if (rst_i) begin
-         prev_grant <= 1;
+         prev_grant <= {{MASTERS-1{1'b0}},1'b1};
       end else begin   
          prev_grant <= grant;
       end
