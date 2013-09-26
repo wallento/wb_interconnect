@@ -152,9 +152,9 @@ module wb_bus_b3(/*AUTOARG*/
    output [SLAVES*2-1:0]          s_bte_o;
 
    input [DATA_WIDTH*SLAVES-1:0]  s_dat_i;
-   input [SLAVES-1:0] 		  s_ack_i;
-   input [SLAVES-1:0] 		  s_err_i;
-   input [SLAVES-1:0] 		  s_rty_i;
+   input [SLAVES-1:0]             s_ack_i;
+   input [SLAVES-1:0]             s_err_i;
+   input [SLAVES-1:0]             s_rty_i;
 
    // The snoop port forwards all write accesses on their success for
    // one cycle.
@@ -219,6 +219,10 @@ module wb_bus_b3(/*AUTOARG*/
    // The selected slave is also one hot encoded
    wire [SLAVES-1:0]      s_select; 
 
+   // If either memory maps overlap or an address is not matched, the
+   // bus generates an error itself.
+   wire                   bus_error;
+   
    // Generate variables for all the wiring
    genvar m, s;
 
@@ -249,10 +253,11 @@ module wb_bus_b3(/*AUTOARG*/
          // arbitrated master. The signals are masked with the strobe
          // to make it more clear and not have for example permanent
          // ack'ing slaves forwarded to a master without request
-         // (should not have any effect, but more clear)
-         assign m_o[m][S_ACK] = grant[m] & s_bus[S_ACK] & m_bus[M_STB];
-         assign m_o[m][S_ERR] = grant[m] & s_bus[S_ERR] & m_bus[M_STB];
-         assign m_o[m][S_RTY] = grant[m] & s_bus[S_RTY] & m_bus[M_STB];    
+         // (should not have any effect, but more clear).
+         // Error can also be a bus error.
+         assign m_o[m][S_ACK] = grant[m] & (s_bus[S_ACK] & !bus_error) & m_bus[M_STB];
+         assign m_o[m][S_ERR] = grant[m] & (s_bus[S_ERR] | bus_error) & m_bus[M_STB];
+         assign m_o[m][S_RTY] = grant[m] & (s_bus[S_RTY] & !bus_error) & m_bus[M_STB];    
       end // block: gen_m_bus
       
       for (s = 0; s < SLAVES; s = s + 1) begin : gen_s_bus
@@ -365,6 +370,9 @@ module wb_bus_b3(/*AUTOARG*/
         assign s_select[9] = (m_bus[M_ADDR_MSB:M_ADDR_MSB-S9_RANGE_WIDTH+1] == S9_RANGE_MATCH);      
    endgenerate
 
+   // If two s_select are high or none, we might have an bus error
+   assign bus_error = ~^s_select;
+   
    // Mux the slave bus based on the slave select signal (one hot!)
    always @(*) begin : bus_s_mux
       integer i;
